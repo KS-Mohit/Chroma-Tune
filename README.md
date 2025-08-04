@@ -21,10 +21,10 @@ This application uses a multi-modal AI approach to understand the "vibe" of an i
 
 ## Features
 
-- ** Image-to-Music:** Upload a photo or use your camera, and the AI will analyze the scene's mood, color, and ambiance to recommend songs.
-- ** Text-to-Music:** Provide a text description of a setting (e.g., "a rainy day, perfect for studying") to get matching music.
-- ** Dynamic Playlist Analysis:** Connect any Spotify playlist. The app fetches the songs, uses an LLM to generate a rich "vibe" description for each track, and builds a searchable in-memory vector database.
-- ** Runs Locally:** No complex cloud database setup required. The entire vector store is built and held in memory while the app is running.
+- **Image-to-Music:** Upload a photo or use your camera, and the AI will analyze the scene's mood, color, and ambiance to recommend songs.
+- **Text-to-Music:** Provide a text description of a setting (e.g., "a rainy day, perfect for studying") to get matching music.
+- **Dynamic Playlist Analysis:** Connect any Spotify playlist. The app fetches the songs, uses an LLM to generate a rich "vibe" description for each track, and builds a searchable in-memory vector database.
+- **Runs Locally:** No complex cloud database setup required. The entire vector store is built and held in memory while the app is running.
 
 ---
 
