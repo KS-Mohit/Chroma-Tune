@@ -14,10 +14,10 @@ def load_gemini_models():
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
     # Initialize the model for text generation (describing songs)
-    text_model = genai.GenerativeModel("gemini-1.5-flash")
+    text_model = genai.GenerativeModel("gemini-2.5-flash")
     
     # Initialize the model for image analysis (understanding the vibe)
-    vision_model = genai.GenerativeModel("gemini-1.5-flash") # This model can handle both text and images
+    vision_model = genai.GenerativeModel("gemini-2.5-flash") # This model can handle both text and images
     
     return text_model, vision_model
 
@@ -29,7 +29,7 @@ def load_embedding_model():
     """
     # The task_type is 'retrieval_document' for storing docs and 'retrieval_query' for searching
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001", 
+        model="models/text-embedding-004", 
         google_api_key=st.secrets["GOOGLE_API_KEY"]
     )
     return embeddings

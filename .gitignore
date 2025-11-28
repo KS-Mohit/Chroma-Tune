@@ -1,5 +1,5 @@
 # Virtual Environment
-.venv/
+venv/
 
 # Streamlit secrets
 .streamlit/secrets.toml
@@ -11,3 +11,7 @@ __pycache__/
 
 # IDE files
 .vscode/
+
+.env
+
+/check_models.py
