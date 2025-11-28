@@ -2,7 +2,6 @@
 
 Struggling to find the perfect soundtrack for every moment? Chroma-Tune is a smart music discovery app that curates song recommendations based on your vibe. Simply upload an image or describe a scene, and let our AI find the perfect music to match.
 
-<!-- ![App Preview](https://i.imgur.com/Lz0aJ1g.png) -->
 
 ---
 
@@ -17,6 +16,7 @@ This application uses a multi-modal AI approach to understand the "vibe" of an i
 - **Vector Search & Storage:** [Facebook AI Similarity Search (FAISS)](https://faiss.ai/) (In-Memory)
 - **Music Data:** [Spotify Web API](https://developer.spotify.com/documentation/web-api)
 
+![Architecture Diagram](images/architecture.png)
 ---
 
 ## Features
