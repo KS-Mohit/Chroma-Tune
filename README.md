@@ -20,7 +20,7 @@ This application uses a multi-modal AI approach to understand the "vibe" of an i
 - **Music Data:** Spotify Web API
 - **Infrastructure:** Docker & Docker Compose
 
-![Architecture Diagram](images/architecture.png)
+<!-- ![Architecture Diagram](images/architecture.png) -->
 ---
 
 ## Features
