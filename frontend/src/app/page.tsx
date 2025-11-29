@@ -6,7 +6,7 @@ import { Music, Upload, Disc, Zap, Play, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { toast } from "sonner"; // For notifications
+import { toast } from "sonner"; 
 
 export default function Home() {
   const [playlistId, setPlaylistId] = useState("");
@@ -15,7 +15,7 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<any>(null);
 
-  // --- 1. Ingest Logic (Connects to /ingest) ---
+  // --- 1. Ingest Logic ---
   const handleIngest = async () => {
     if (!playlistId) {
       toast.error("Missing ID", { description: "Please enter a Spotify Playlist ID." });
@@ -48,7 +48,7 @@ export default function Home() {
     }
   };
 
-  // --- 2. Search Logic (Connects to /search) ---
+  // --- 2. Search Logic ---
   const handleSearch = async () => {
     if (!searchQuery) {
       toast.warning("Empty Vibe", { description: "Describe a setting or upload a photo first." });
@@ -56,7 +56,6 @@ export default function Home() {
     }
 
     setIsSearching(true);
-    // Use FormData to support both text and potential future file uploads
     const formData = new FormData();
     formData.append("text", searchQuery);
     
@@ -94,10 +93,12 @@ export default function Home() {
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-3"
         >
-          <div className="p-3 bg-gradient-to-br from-green-400 to-green-600 rounded-xl shadow-lg shadow-green-900/20">
+          {/* UPDATED: bg-gradient -> bg-linear */}
+          <div className="p-3 bg-linear-to-br from-green-400 to-green-600 rounded-xl shadow-lg shadow-green-900/20">
             <Music className="w-8 h-8 text-black" />
           </div>
-          <h1 className="text-4xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
+          {/* UPDATED: bg-gradient -> bg-linear */}
+          <h1 className="text-4xl font-bold tracking-tighter bg-clip-text text-transparent bg-linear-to-r from-white to-zinc-500">
             Chroma-Tune
           </h1>
         </motion.div>
@@ -116,7 +117,6 @@ export default function Home() {
                 </div>
                 <Input 
                     placeholder="Spotify Playlist ID" 
-                    // FIX: Added text-white so input is visible
                     className="bg-zinc-950 border-zinc-800 focus-visible:ring-green-500 text-white placeholder:text-zinc-600"
                     value={playlistId}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setPlaylistId(e.target.value)}
@@ -138,8 +138,8 @@ export default function Home() {
 
             {/* Vibe Check Section */}
             <Card className="col-span-3 md:col-span-2 p-6 bg-zinc-900/50 border-zinc-800 backdrop-blur-xl flex flex-col gap-4 min-h-[300px] justify-center relative overflow-hidden group">
-                 {/* Decorative Swoosh */}
-                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-zinc-800/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                 {/* UPDATED: bg-gradient -> bg-linear */}
+                 <div className="absolute inset-0 bg-linear-to-r from-transparent via-zinc-800/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                  
                  <div className="flex flex-col gap-2 z-10">
                     <h2 className="text-2xl font-bold text-white">How's the vibe?</h2>
@@ -149,7 +149,6 @@ export default function Home() {
                  <div className="flex gap-2 z-10">
                     <Input 
                         placeholder="e.g. 'Late night drive in Tokyo'" 
-                        // FIX: Added text-white so input is visible
                         className="bg-zinc-950/80 border-zinc-700 h-12 text-lg text-white placeholder:text-zinc-600"
                         value={searchQuery}
                         onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
