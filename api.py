@@ -9,6 +9,8 @@ import os
 from PIL import Image
 import io
 from dotenv import load_dotenv
+from langchain_pinecone import PineconeVectorStore
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
@@ -23,27 +25,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global State to hold the playlist in memory
-APP_STATE = {"vector_store": None}
-
 class PlaylistRequest(BaseModel):
     playlist_id: str
 
 @app.get("/")
 def read_root():
-    return {"status": "Chroma-Tune Backend Running"}
+    return {"status": "Chroma-Tune API (Pinecone Edition)"}
 
 @app.post("/ingest")
 def ingest_playlist(request: PlaylistRequest):
-    print(f"--- Starting Ingest for {request.playlist_id} ---")
+    print(f"--- Starting Cloud Ingest for {request.playlist_id} ---")
     try:
-        store = build_vector_store(request.playlist_id)
-        if not store:
-            raise HTTPException(status_code=400, detail="Could not build vector store. Check logs.")
+        success = build_vector_store(request.playlist_id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to process playlist")
             
-        APP_STATE["vector_store"] = store
-        print("--- Ingest Complete ---")
-        return {"status": "success", "message": "Playlist processed successfully"}
+        return {"status": "success", "message": "Playlist synced to Cloud Vector Store"}
     except Exception as e:
         print(f"CRITICAL ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -53,11 +50,7 @@ async def search_vibe(
     text: str = Form(None),
     file: UploadFile = File(None)
 ):
-    store = APP_STATE["vector_store"]
-    if not store:
-        raise HTTPException(status_code=400, detail="No playlist loaded. Please sync a playlist first.")
-
-    # 1. Handle Vision (if image uploaded)
+    # 1. Handle Vision
     image_description = ""
     if file:
         try:
@@ -69,23 +62,32 @@ async def search_vibe(
         except Exception as e:
             print(f"Vision Error: {e}")
 
-    # 2. Combine inputs
     full_query = f"{image_description} {text if text else ''}".strip()
     if not full_query:
          raise HTTPException(status_code=400, detail="Please provide text or an image.")
 
-    print(f"Searching for vibe: {full_query}")
+    print(f"Searching Pinecone for: {full_query}")
 
-    results = store.similarity_search_with_score(full_query, k=5)
+    # 2. Connect to Pinecone Index 
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/text-embedding-004", 
+        google_api_key=os.getenv("GOOGLE_API_KEY")
+    )
+    
+    vector_store = PineconeVectorStore.from_existing_index(
+        index_name="chroma-tune",
+        embedding=embeddings
+    )
+
+    # 3. Perform Search
+    results = vector_store.similarity_search_with_score(full_query, k=5)
     
     songs = []
     for doc, score in results:
         songs.append({
-            "name": doc.metadata["Song_Name"],
-            "artist": doc.metadata["Artist"],
-            "url": doc.metadata["Song_URL"],
-            # FAISS returns L2 distance (lower is better). 
-            # We send it as is; frontend will calculate percentage.
+            "name": doc.metadata.get("Song_Name"),
+            "artist": doc.metadata.get("Artist"),
+            "url": doc.metadata.get("Song_URL"),
             "score": float(score) 
         })
         

@@ -7,11 +7,16 @@ import re
 from dotenv import load_dotenv
 import google.generativeai as genai
 from langchain_core.documents import Document
-from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
+from pinecone import Pinecone
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
+# Initialize Pinecone Client
+pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+INDEX_NAME = "chroma-tune"
 
 def get_spotify_token():
     try:
@@ -34,35 +39,22 @@ def fetch_playlist_tracks(playlist_id):
     print(f"Fetching tracks from Spotify...")
     while url:
         res = requests.get(url, headers=headers)
+        if res.status_code != 200: break
         data = res.json()
         tracks.extend(data.get('items', []))
         url = data.get('next')
     return tracks
 
 def generate_batch_descriptions(songs_batch):
-    """
-    Sends a batch of songs to Gemini and asks for a JSON response.
-    songs_batch: List of dictionaries [{'name': '...', 'artist': '...'}, ...]
-    """
     model = genai.GenerativeModel("gemini-2.5-flash")
-    
-    # Create a clean list for the prompt
     songs_text = "\n".join([f"{i+1}. {s['name']} by {s['artist']}" for i, s in enumerate(songs_batch)])
     
     prompt = f"""
-    I have a list of songs. For each song, provide a short, vivid, 1-sentence description of the vibe/setting (e.g., "upbeat city drive" or "rainy coffee shop").
-    
-    RETURN ONLY RAW JSON. Do not use Markdown blocks.
-    The format must be a list of objects, strictly in the same order as the input:
-    [
-        {{"title": "Song Title", "vibe": "Description here"}},
-        ...
-    ]
-
-    Songs to process:
+    I have a list of songs. For each song, provide a short, vivid, 1-sentence description of the vibe/setting.
+    RETURN ONLY RAW JSON. Format: [{{"title": "Song Title", "vibe": "Description"}}]
+    Songs:
     {songs_text}
     """
-    
     try:
         response = model.generate_content(prompt)
         clean_text = re.sub(r'```json|```', '', response.text).strip()
@@ -72,10 +64,11 @@ def generate_batch_descriptions(songs_batch):
         return []
 
 def build_vector_store(playlist_id):
+    """
+    Fetches songs, generates descriptions, and UPLOADS them to Pinecone.
+    """
     raw_tracks = fetch_playlist_tracks(playlist_id)
-    documents = []
     
-    # Filter valid tracks first
     valid_tracks = []
     for item in raw_tracks:
         if item and item.get('track'):
@@ -87,19 +80,17 @@ def build_vector_store(playlist_id):
             })
 
     total_tracks = len(valid_tracks)
-    print(f"Processing {total_tracks} songs...")
-
-    # --- BATCH PROCESSING ---
-    BATCH_SIZE = 10  # Process 10 songs per API call
+    print(f"Processing {total_tracks} songs for Pinecone...")
+    
+    documents = []
+    BATCH_SIZE = 10 
     
     for i in range(0, total_tracks, BATCH_SIZE):
         batch = valid_tracks[i : i + BATCH_SIZE]
-        print(f"Generating vibes for batch {i//BATCH_SIZE + 1} ({len(batch)} songs)...")
+        print(f"Batch {i//BATCH_SIZE + 1}...")
         
-        # Call Gemini with the batch
         results = generate_batch_descriptions(batch)
         
-        # Match results back to the original track data
         for track_data, result in zip(batch, results):
             description = result.get('vibe', f"Music by {track_data['artist']}")
             
@@ -112,17 +103,22 @@ def build_vector_store(playlist_id):
                 }
             )
             documents.append(doc)
-            
         time.sleep(1)
 
     if not documents:
-        return None
+        return False
 
-    print("Building Vector Store...")
+    print("Uploading vectors to Pinecone...")
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/text-embedding-004",
         google_api_key=os.getenv("GOOGLE_API_KEY")
     )
     
-    vector_store = FAISS.from_documents(documents, embeddings)
-    return vector_store
+    # This pushes the data to the Cloud
+    PineconeVectorStore.from_documents(
+        documents, 
+        embeddings, 
+        index_name=INDEX_NAME
+    )
+    
+    return True
