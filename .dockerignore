@@ -1,0 +1,17 @@
+# Ignore Python Environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore Node Modules & Builds
+node_modules/
+frontend/node_modules/
+frontend/.next/
+.next/
+npm-debug.log
+
+# Ignore Git & Secrets
+.git/
+.gitignore
+.env

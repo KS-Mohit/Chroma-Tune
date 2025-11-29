@@ -12,6 +12,9 @@ __pycache__/
 # IDE files
 .vscode/
 
+# Local Database
+playlists.json
+
 .env
 
 /check_models.py
