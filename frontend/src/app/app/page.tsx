@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, ChangeEvent } from "react";
+import { useState, useEffect, ChangeEvent, useRef, DragEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Music, Upload, Zap, Play, Loader2, ExternalLink, RefreshCw, ArrowLeft, PlusCircle, Key, X, AlertTriangle, Check } from "lucide-react";
+import { Music, Upload, Zap, Play, Loader2, ExternalLink, RefreshCw, ArrowLeft, PlusCircle, Key, X, AlertTriangle, Check, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -31,6 +31,12 @@ export default function AppPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [songCount, setSongCount] = useState<number | null>(null);
+
+  // Image upload state
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // API key state
   const [needsApiKey, setNeedsApiKey] = useState(false);
@@ -131,8 +137,42 @@ export default function AppPage() {
     }
   };
 
+  const handleImageSelect = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error("Invalid file", { description: "Please select an image file." });
+      return;
+    }
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleImageSelect(file);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const clearImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const handleSearch = async () => {
-    if (!searchQuery) return;
+    if (!searchQuery && !selectedImage) {
+      toast.error("Enter a vibe description or upload an image");
+      return;
+    }
 
     // Determine which provider to use
     const providerToUse = Object.keys(savedKeys).length > 0
@@ -149,7 +189,8 @@ export default function AppPage() {
 
     setIsSearching(true);
     const formData = new FormData();
-    formData.append("text", searchQuery);
+    if (searchQuery) formData.append("text", searchQuery);
+    if (selectedImage) formData.append("file", selectedImage);
     formData.append("provider", providerToUse);
     if (apiKey) {
       formData.append("user_api_key", apiKey);
@@ -177,6 +218,7 @@ export default function AppPage() {
 
       const data = await res.json();
       setResults(data);
+      clearImage(); // Clear image after successful search
 
       if (data.used_user_key) {
         toast.info(`Using your ${PROVIDERS.find(p => p.id === data.provider)?.name || data.provider} key`);
@@ -422,10 +464,47 @@ export default function AppPage() {
               </Button>
             </div>
 
-            <div className="border-2 border-dashed border-zinc-800 rounded-lg p-6 text-center text-zinc-600 hover:text-zinc-400 hover:border-zinc-600 transition-colors cursor-pointer">
-              <Upload className="w-6 h-6 mx-auto mb-2" />
-              <span className="text-sm">Drag & Drop Image (Coming Soon)</span>
-            </div>
+            {/* Image Upload */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => e.target.files?.[0] && handleImageSelect(e.target.files[0])}
+            />
+
+            {imagePreview ? (
+              <div className="relative rounded-lg overflow-hidden border border-zinc-700">
+                <img src={imagePreview} alt="Selected" className="w-full h-48 object-cover" />
+                <button
+                  onClick={clearImage}
+                  className="absolute top-2 right-2 p-1 bg-black/60 rounded-full hover:bg-black/80 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 rounded text-xs flex items-center gap-1">
+                  <ImageIcon className="w-3 h-3" />
+                  {selectedImage?.name}
+                </div>
+              </div>
+            ) : (
+              <div
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                  isDragging
+                    ? "border-green-500 bg-green-500/10 text-green-400"
+                    : "border-zinc-800 text-zinc-600 hover:text-zinc-400 hover:border-zinc-600"
+                }`}
+              >
+                <Upload className="w-6 h-6 mx-auto mb-2" />
+                <span className="text-sm">
+                  {isDragging ? "Drop image here" : "Drag & Drop or Click to Upload Image"}
+                </span>
+              </div>
+            )}
 
             {/* Example Prompts */}
             <div className="flex flex-wrap gap-2">
