@@ -86,6 +86,9 @@ def describe_image_anthropic(image_bytes: bytes, api_key: str) -> str:
 # Collaborative playlist ID
 PLAYLIST_ID = "5DYHhVIXo6PhfXqjIlu6rt"
 
+# Admin secret for dangerous endpoints
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "change-this-secret")
+
 # Rate limiting config
 RATE_LIMIT_REQUESTS = 10  # requests per window
 RATE_LIMIT_WINDOW = 60    # seconds
@@ -158,8 +161,10 @@ def get_stats():
 
 
 @app.get("/inspect")
-def inspect_pinecone(limit: int = 20):
+def inspect_pinecone(limit: int = 20, secret: str = None):
     """Inspect what's stored in Pinecone (no embeddings needed)."""
+    if secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Unauthorized")
     try:
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         index = pc.Index("chroma-tune")
@@ -253,8 +258,10 @@ def test_embedding():
     return results
 
 @app.post("/clear")
-def clear_pinecone():
+def clear_pinecone(secret: str = None):
     """Clear all vectors from Pinecone and reset local tracking."""
+    if secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Unauthorized")
     try:
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         index = pc.Index("chroma-tune")
@@ -273,8 +280,10 @@ def clear_pinecone():
 
 
 @app.post("/recreate-index")
-def recreate_index():
+def recreate_index(secret: str = None):
     """Delete and recreate Pinecone index with correct dimensions (3072 for gemini-embedding-001)."""
+    if secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Unauthorized")
     try:
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 
