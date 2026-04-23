@@ -6,8 +6,8 @@ import { Toaster } from "sonner"; // Import the toaster
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Chroma-Tune",
-  description: "AI Vibe Matching for Spotify",
+  title: "Chroma-Tune | AI-Powered Music Discovery",
+  description: "Find music that matches your vibe. Describe a mood, scene, or feeling and let AI search your Spotify playlists for the perfect tracks.",
 };
 
 export default function RootLayout({

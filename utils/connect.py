@@ -29,7 +29,7 @@ def load_embedding_model():
     """
     # The task_type is 'retrieval_document' for storing docs and 'retrieval_query' for searching
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004", 
+        model="models/embedding-001", 
         google_api_key=st.secrets["GOOGLE_API_KEY"]
     )
     return embeddings
