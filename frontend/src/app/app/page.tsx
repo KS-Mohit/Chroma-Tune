@@ -344,7 +344,7 @@ export default function AppPage() {
               <Music className="w-8 h-8 text-black" />
             </div>
             <h1 className="text-4xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
-              Chroma-Tune
+              ChromaTune
             </h1>
           </div>
           <div className="flex items-center gap-2">

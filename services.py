@@ -85,6 +85,93 @@ def fetch_playlist_tracks(playlist_id):
     return tracks
 
 
+def fetch_audio_features(track_ids):
+    """Fetches audio features for multiple tracks (max 100 per request)."""
+    token = get_spotify_token()
+    if not token:
+        return {}
+
+    headers = {'Authorization': f'Bearer {token}'}
+    features = {}
+
+    # Spotify allows max 100 IDs per request
+    for i in range(0, len(track_ids), 100):
+        batch_ids = track_ids[i:i + 100]
+        url = f'https://api.spotify.com/v1/audio-features?ids={",".join(batch_ids)}'
+
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            data = res.json()
+            for feature in data.get('audio_features', []):
+                if feature:
+                    features[feature['id']] = {
+                        'energy': feature.get('energy', 0),
+                        'tempo': feature.get('tempo', 0),
+                        'danceability': feature.get('danceability', 0),
+                        'valence': feature.get('valence', 0),  # happiness
+                        'acousticness': feature.get('acousticness', 0),
+                        'instrumentalness': feature.get('instrumentalness', 0)
+                    }
+        else:
+            print(f"Audio features error: {res.status_code}")
+
+    return features
+
+
+def describe_audio_features(features):
+    """Convert audio features to human-readable description."""
+    if not features:
+        return ""
+
+    parts = []
+
+    # Energy
+    energy = features.get('energy', 0)
+    if energy > 0.8:
+        parts.append("high-energy")
+    elif energy > 0.5:
+        parts.append("moderate energy")
+    else:
+        parts.append("calm and relaxed")
+
+    # Tempo
+    tempo = features.get('tempo', 0)
+    if tempo > 140:
+        parts.append("fast-paced")
+    elif tempo > 100:
+        parts.append("upbeat tempo")
+    else:
+        parts.append("slow tempo")
+
+    # Valence (happiness)
+    valence = features.get('valence', 0)
+    if valence > 0.7:
+        parts.append("happy and positive")
+    elif valence > 0.4:
+        parts.append("neutral mood")
+    else:
+        parts.append("melancholic or dark")
+
+    # Danceability
+    dance = features.get('danceability', 0)
+    if dance > 0.7:
+        parts.append("very danceable")
+    elif dance > 0.5:
+        parts.append("groovy")
+
+    # Acousticness
+    acoustic = features.get('acousticness', 0)
+    if acoustic > 0.7:
+        parts.append("acoustic")
+
+    # Instrumentalness
+    instrumental = features.get('instrumentalness', 0)
+    if instrumental > 0.5:
+        parts.append("instrumental")
+
+    return ", ".join(parts)
+
+
 def get_indexed_song_ids():
     """Returns set of already indexed song IDs."""
     if not os.path.exists(INDEXED_SONGS_FILE):
@@ -135,13 +222,24 @@ def init_indexed_songs(playlist_id):
     return len(song_ids)
 
 
-def generate_batch_descriptions(songs_batch):
-    """Uses Gemini to generate vibe descriptions for songs."""
+def generate_batch_descriptions(songs_batch, audio_features_map):
+    """Uses Gemini to generate vibe descriptions for songs, enhanced with audio features."""
     model = genai.GenerativeModel("gemini-2.5-flash")
-    songs_text = "\n".join([f"{i+1}. {s['name']} by {s['artist']}" for i, s in enumerate(songs_batch)])
+
+    # Build song text with audio features
+    songs_lines = []
+    for i, s in enumerate(songs_batch):
+        features = audio_features_map.get(s['id'], {})
+        feature_desc = describe_audio_features(features)
+        if feature_desc:
+            songs_lines.append(f"{i+1}. {s['name']} by {s['artist']} ({feature_desc})")
+        else:
+            songs_lines.append(f"{i+1}. {s['name']} by {s['artist']}")
+
+    songs_text = "\n".join(songs_lines)
 
     prompt = f"""
-    I have a list of songs. For each song, provide a short, vivid, 1-sentence description of the vibe/setting.
+    I have a list of songs with their audio characteristics. For each song, provide a short, vivid, 1-sentence description of the vibe/setting that matches both the song and its audio profile.
     RETURN ONLY RAW JSON. Format: [{{"title": "Song Title", "vibe": "Description"}}]
     Songs:
     {songs_text}
@@ -203,7 +301,13 @@ def sync_collaborative_playlist(playlist_id):
         print(f"Limiting to {space_left} new songs (free tier)")
         new_tracks = new_tracks[:space_left]
 
-    # 5. Process new songs in batches
+    # 5. Fetch audio features for all new tracks
+    print("Fetching audio features from Spotify...")
+    new_track_ids = [t['id'] for t in new_tracks]
+    audio_features_map = fetch_audio_features(new_track_ids)
+    print(f"Got audio features for {len(audio_features_map)} tracks")
+
+    # 6. Process new songs in batches
     BATCH_SIZE = 10
 
     try:
@@ -220,19 +324,26 @@ def sync_collaborative_playlist(playlist_id):
             batch = new_tracks[i:i + BATCH_SIZE]
             print(f"Processing batch {i // BATCH_SIZE + 1}: {len(batch)} songs")
 
-            results = generate_batch_descriptions(batch)
+            results = generate_batch_descriptions(batch, audio_features_map)
 
             batch_docs = []
             batch_ids = []
 
             for track_data, result in zip(batch, results):
                 description = result.get('vibe', f"Music by {track_data['artist']}")
+                features = audio_features_map.get(track_data['id'], {})
+
                 doc = Document(
                     page_content=description,
                     metadata={
                         "Song_Name": track_data['name'],
                         "Artist": track_data['artist'],
-                        "Song_URL": track_data['url']
+                        "Song_URL": track_data['url'],
+                        "energy": features.get('energy', 0),
+                        "tempo": features.get('tempo', 0),
+                        "danceability": features.get('danceability', 0),
+                        "valence": features.get('valence', 0),
+                        "acousticness": features.get('acousticness', 0)
                     }
                 )
                 batch_docs.append(doc)
@@ -247,7 +358,7 @@ def sync_collaborative_playlist(playlist_id):
         print(f"Indexing error: {e}")
         return {"success": False, "song_count": len(indexed_ids), "new_songs": len(newly_indexed), "error": f"Indexing failed: {str(e)}"}
 
-    # 6. Update indexed songs list
+    # 7. Update indexed songs list
     indexed_ids.update(newly_indexed)
     save_indexed_song_ids(indexed_ids)
 

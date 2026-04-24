@@ -1,6 +1,6 @@
-# Chroma-Tune: AI-Powered Music Discovery
+# ChromaTune: AI-Powered Music Discovery
 
-Struggling to find the perfect soundtrack for the moment? Chroma-Tune is a modern, full-stack AI application that curates song recommendations based on your exact "vibe."
+Struggling to find the perfect soundtrack for the moment? ChromaTune is a modern, full-stack AI application that curates song recommendations based on your exact "vibe."
 
 Upload an image or describe a scene, and our multi-modal AI searches a community-curated playlist to find the perfect music match.
 
@@ -62,8 +62,8 @@ This application uses a multi-modal AI approach to understand the "vibe" of an i
 
 1. **Clone the repository:**
     ```bash
-    git clone https://github.com/KS-Mohit/Chroma-Tune.git
-    cd Chroma-Tune
+    git clone https://github.com/KS-Mohit/ChromaTune.git
+    cd ChromaTune
     ```
 
 2. **Create your environment variables:**
@@ -146,7 +146,7 @@ Keys are stored locally in the browser (never sent to server for storage).
 ## Project Structure
 
 ```
-Chroma-Tune/
+ChromaTune/
 ├── frontend/                # Next.js frontend
 │   └── src/app/
 │       ├── page.tsx        # Landing page

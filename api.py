@@ -13,8 +13,14 @@ from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone
 from collections import defaultdict
 import time
+import asyncio
+from contextlib import asynccontextmanager
 
 from services import sync_collaborative_playlist, get_song_count, init_indexed_songs, GoogleNativeEmbeddings
+
+# Auto-sync configuration
+AUTO_SYNC_ENABLED = os.getenv("AUTO_SYNC_ENABLED", "false").lower() == "true"
+AUTO_SYNC_INTERVAL = int(os.getenv("AUTO_SYNC_INTERVAL", "300"))  # seconds (default 5 min)
 
 load_dotenv()
 
@@ -94,7 +100,42 @@ RATE_LIMIT_REQUESTS = 10  # requests per window
 RATE_LIMIT_WINDOW = 60    # seconds
 request_counts = defaultdict(list)
 
-app = FastAPI()
+async def auto_sync_task():
+    """Background task that periodically syncs the playlist."""
+    while True:
+        await asyncio.sleep(AUTO_SYNC_INTERVAL)
+        try:
+            print(f"[Auto-Sync] Checking for new songs...")
+            result = sync_collaborative_playlist(PLAYLIST_ID)
+            if result.get("new_songs", 0) > 0:
+                print(f"[Auto-Sync] Added {result['new_songs']} new songs!")
+            else:
+                print(f"[Auto-Sync] No new songs found.")
+        except Exception as e:
+            print(f"[Auto-Sync] Error: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events."""
+    # Startup
+    print("Initializing ChromaTune API...")
+    init_indexed_songs(PLAYLIST_ID)
+
+    # Start auto-sync background task if enabled
+    if AUTO_SYNC_ENABLED:
+        print(f"[Auto-Sync] Enabled. Checking every {AUTO_SYNC_INTERVAL} seconds.")
+        asyncio.create_task(auto_sync_task())
+    else:
+        print("[Auto-Sync] Disabled. Set AUTO_SYNC_ENABLED=true to enable.")
+
+    yield
+
+    # Shutdown
+    print("Shutting down ChromaTune API...")
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 def check_rate_limit(client_ip: str) -> bool:
@@ -135,11 +176,6 @@ def get_api_key(user_key: str = None) -> tuple[str, bool]:
 
     return None, False
 
-@app.on_event("startup")
-def startup_event():
-    """Initialize indexed songs tracking from existing playlist."""
-    init_indexed_songs(PLAYLIST_ID)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -150,14 +186,19 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"status": "Chroma-Tune API", "playlist_id": PLAYLIST_ID}
+    return {"status": "ChromaTune API", "playlist_id": PLAYLIST_ID}
 
 
 @app.get("/stats")
 def get_stats():
     """Returns stats about the indexed songs."""
     count = get_song_count()
-    return {"song_count": count, "playlist_id": PLAYLIST_ID}
+    return {
+        "song_count": count,
+        "playlist_id": PLAYLIST_ID,
+        "auto_sync_enabled": AUTO_SYNC_ENABLED,
+        "auto_sync_interval": AUTO_SYNC_INTERVAL
+    }
 
 
 @app.get("/inspect")

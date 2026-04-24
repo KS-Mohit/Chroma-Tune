@@ -23,10 +23,10 @@ export default function Home() {
             <div className="p-2 bg-gradient-to-br from-green-400 to-green-600 rounded-lg">
               <Music className="w-5 h-5 text-black" />
             </div>
-            <span className="text-xl font-bold tracking-tight">Chroma-Tune</span>
+            <span className="text-xl font-bold tracking-tight">ChromaTune</span>
           </div>
           <a
-            href="https://github.com/KS-Mohit/Chroma-Tune"
+            href="https://github.com/KS-Mohit/ChromaTune"
             target="_blank"
             className="p-2 rounded-lg hover:bg-zinc-800 transition-colors"
           >
@@ -48,7 +48,7 @@ export default function Home() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-sm mb-8"
           >
             <Sparkles className="w-4 h-4" />
-            AI-Powered Music Discovery
+            Music Discovery
           </motion.div>
 
           <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-6">
@@ -115,7 +115,7 @@ export default function Home() {
             <div className="p-2 bg-gradient-to-br from-green-400 to-green-600 rounded-lg">
               <Music className="w-4 h-4 text-black" />
             </div>
-            <span className="font-semibold">Chroma-Tune</span>
+            <span className="font-semibold">ChromaTune</span>
           </div>
           <p className="text-zinc-600 text-sm">
             Built with Gemini AI, Pinecone, and Spotify API
