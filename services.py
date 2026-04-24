@@ -48,14 +48,25 @@ MAX_SONGS = 500  # Stay well under free tier limits
 
 def get_spotify_token():
     try:
+        client_id = os.getenv("SPOTIFY_CLIENT_ID")
+        client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
+        print(f"[Spotify Auth] Client ID: {client_id[:8]}... Secret: {'***' if client_secret else 'MISSING'}")
+
         response = requests.post('https://accounts.spotify.com/api/token', {
             'grant_type': 'client_credentials',
-            'client_id': os.getenv("SPOTIFY_CLIENT_ID"),
-            'client_secret': os.getenv("SPOTIFY_CLIENT_SECRET"),
+            'client_id': client_id,
+            'client_secret': client_secret,
         })
-        return response.json().get('access_token')
+        data = response.json()
+
+        if 'access_token' in data:
+            print(f"[Spotify Auth] Token obtained successfully")
+            return data['access_token']
+        else:
+            print(f"[Spotify Auth] Failed: {data}")
+            return None
     except Exception as e:
-        print(f"Auth Error: {e}")
+        print(f"[Spotify Auth] Error: {e}")
         return None
 
 
@@ -70,12 +81,25 @@ def fetch_playlist_tracks(playlist_id):
     url = f'https://api.spotify.com/v1/playlists/{playlist_id}/tracks'
     tracks = []
 
-    print(f"Fetching tracks from Spotify for playlist {playlist_id}...")
+    print(f"[Spotify] Fetching playlist {playlist_id}...")
     while url:
         res = requests.get(url, headers=headers)
-        print(f"Spotify response: {res.status_code}")
+        print(f"[Spotify] Response: {res.status_code}")
         if res.status_code != 200:
-            print(f"Spotify error: {res.text[:200]}")
+            try:
+                error_data = res.json()
+                error_msg = error_data.get('error', {}).get('message', res.text[:200])
+                error_reason = error_data.get('error', {}).get('reason', 'unknown')
+                print(f"[Spotify] Error: {error_msg}")
+                print(f"[Spotify] Reason: {error_reason}")
+                if res.status_code == 403:
+                    print(f"[Spotify] 403 = Premium required OR playlist is private/restricted")
+                elif res.status_code == 401:
+                    print(f"[Spotify] 401 = Bad credentials")
+                elif res.status_code == 404:
+                    print(f"[Spotify] 404 = Playlist not found")
+            except:
+                print(f"[Spotify] Raw error: {res.text[:300]}")
             return None
         data = res.json()
         tracks.extend(data.get('items', []))

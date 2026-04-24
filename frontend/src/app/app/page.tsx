@@ -2,7 +2,7 @@
 
 import { useState, useEffect, ChangeEvent, useRef, DragEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Music, Upload, Zap, Play, Loader2, ExternalLink, RefreshCw, ArrowLeft, PlusCircle, Key, X, AlertTriangle, Check, ImageIcon } from "lucide-react";
+import { Music, Upload, Zap, Play, Loader2, ExternalLink, ArrowLeft, PlusCircle, Key, X, AlertTriangle, ImageIcon, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -17,13 +17,7 @@ const PLAYLIST = {
   image: "https://mosaic.scdn.co/640/ab67616d00001e021c42b93f217c02977ae4c5d0ab67616d00001e029396544375bc5e09c33c89daab67616d00001e02d3c12724ab66f21170225d22ab67616d00001e02f5768db89dd8ac30fd0e414f"
 };
 
-const API_BASE = "http://localhost:8000";
-
-const PROVIDERS = [
-  { id: "google", name: "Google AI", description: "Gemini 2.5 Flash", color: "text-blue-400", keyUrl: "https://aistudio.google.com/apikey" },
-  { id: "openai", name: "OpenAI", description: "GPT-4o", color: "text-green-400", keyUrl: "https://platform.openai.com/api-keys" },
-  { id: "anthropic", name: "Anthropic", description: "Claude Sonnet", color: "text-orange-400", keyUrl: "https://console.anthropic.com/settings/keys" },
-];
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function AppPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -41,20 +35,13 @@ export default function AppPage() {
   // API key state
   const [needsApiKey, setNeedsApiKey] = useState(false);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState("google");
   const [userApiKey, setUserApiKey] = useState("");
-  const [savedKeys, setSavedKeys] = useState<Record<string, string>>({});
+  const [savedApiKey, setSavedApiKey] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load saved API keys from localStorage
-    const stored = localStorage.getItem("chroma_tune_api_keys");
-    if (stored) {
-      try {
-        setSavedKeys(JSON.parse(stored));
-      } catch (e) {
-        console.error("Failed to parse saved keys");
-      }
-    }
+    // Load saved API key from localStorage
+    const stored = localStorage.getItem("chroma_tune_api_key");
+    if (stored) setSavedApiKey(stored);
 
     fetchStats();
     checkApiStatus();
@@ -78,7 +65,7 @@ export default function AppPage() {
       if (res.ok) {
         const data = await res.json();
         setNeedsApiKey(data.needs_user_key);
-        if (data.needs_user_key && !localStorage.getItem("chroma_tune_api_keys")) {
+        if (data.needs_user_key && !localStorage.getItem("chroma_tune_api_key")) {
           setShowApiKeyModal(true);
         }
       }
@@ -89,49 +76,36 @@ export default function AppPage() {
 
   const saveApiKey = () => {
     if (userApiKey.trim()) {
-      const newKeys = { ...savedKeys, [selectedProvider]: userApiKey.trim() };
-      localStorage.setItem("chroma_tune_api_keys", JSON.stringify(newKeys));
-      setSavedKeys(newKeys);
+      localStorage.setItem("chroma_tune_api_key", userApiKey.trim());
+      setSavedApiKey(userApiKey.trim());
       setUserApiKey("");
       setShowApiKeyModal(false);
-      toast.success("API key saved", { description: `${PROVIDERS.find(p => p.id === selectedProvider)?.name} key stored locally.` });
+      toast.success("API key saved", { description: "Google AI key stored locally." });
     }
   };
 
-  const clearApiKey = (provider: string) => {
-    const newKeys = { ...savedKeys };
-    delete newKeys[provider];
-    localStorage.setItem("chroma_tune_api_keys", JSON.stringify(newKeys));
-    setSavedKeys(newKeys);
+  const clearApiKey = () => {
+    localStorage.removeItem("chroma_tune_api_key");
+    setSavedApiKey(null);
     toast.info("API key removed");
-  };
-
-  const clearAllKeys = () => {
-    localStorage.removeItem("chroma_tune_api_keys");
-    setSavedKeys({});
-    toast.info("All API keys removed");
   };
 
   const handleSync = async () => {
     setIsSyncing(true);
-    toast.info("Syncing playlist...", { description: "Checking for new songs." });
-
     try {
       const res = await fetch(`${API_BASE}/sync`, { method: "POST" });
-      if (!res.ok) throw new Error("Sync failed");
-
       const data = await res.json();
       setSongCount(data.song_count);
 
-      if (data.status === "limit_reached") {
-        toast.warning("Limit reached", { description: data.error });
+      if (data.status === "error") {
+        toast.error("Sync failed", { description: data.error });
       } else if (data.new_songs === 0) {
         toast.success("Already synced", { description: "No new songs to add." });
       } else {
         toast.success("Playlist synced!", { description: `Added ${data.new_songs} new songs.` });
       }
     } catch (e) {
-      toast.error("Sync failed", { description: "Could not sync playlist." });
+      toast.error("Sync failed", { description: "Could not connect to server." });
     } finally {
       setIsSyncing(false);
     }
@@ -174,15 +148,8 @@ export default function AppPage() {
       return;
     }
 
-    // Determine which provider to use
-    const providerToUse = Object.keys(savedKeys).length > 0
-      ? Object.keys(savedKeys)[0]
-      : "google";
-
-    const apiKey = savedKeys[providerToUse];
-
     // Check if we need API key but don't have one
-    if (needsApiKey && !apiKey) {
+    if (needsApiKey && !savedApiKey) {
       setShowApiKeyModal(true);
       return;
     }
@@ -191,9 +158,9 @@ export default function AppPage() {
     const formData = new FormData();
     if (searchQuery) formData.append("text", searchQuery);
     if (selectedImage) formData.append("file", selectedImage);
-    formData.append("provider", providerToUse);
-    if (apiKey) {
-      formData.append("user_api_key", apiKey);
+    formData.append("provider", "google");
+    if (savedApiKey) {
+      formData.append("user_api_key", savedApiKey);
     }
 
     try {
@@ -221,7 +188,7 @@ export default function AppPage() {
       clearImage(); // Clear image after successful search
 
       if (data.used_user_key) {
-        toast.info(`Using your ${PROVIDERS.find(p => p.id === data.provider)?.name || data.provider} key`);
+        toast.info("Using your Google AI key");
       }
     } catch (e: any) {
       toast.error("Search Error", { description: e.message || "Make sure the backend is running." });
@@ -230,7 +197,7 @@ export default function AppPage() {
     }
   };
 
-  const hasAnyKey = Object.keys(savedKeys).length > 0;
+  const hasApiKey = !!savedApiKey;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white font-sans selection:bg-green-500 selection:text-black pb-20">
@@ -271,50 +238,20 @@ export default function AppPage() {
 
               <p className="text-zinc-400 text-sm mb-4">
                 {needsApiKey
-                  ? "Our API quota has been reached. Add your own key to continue."
-                  : "Add your own API key to use your preferred provider."}
+                  ? "Server API unavailable. Add your own Google AI key to continue."
+                  : "Add your own Google AI key for search."}
               </p>
 
-              {/* Provider Selection */}
-              <div className="space-y-2 mb-4">
-                {PROVIDERS.map((provider) => (
-                  <button
-                    key={provider.id}
-                    onClick={() => setSelectedProvider(provider.id)}
-                    className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                      selectedProvider === provider.id
-                        ? "border-green-500 bg-green-500/10"
-                        : "border-zinc-800 hover:border-zinc-700"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`font-medium ${provider.color}`}>{provider.name}</span>
-                      <span className="text-zinc-500 text-sm">{provider.description}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {savedKeys[provider.id] && (
-                        <span className="text-green-500 text-xs flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Saved
-                        </span>
-                      )}
-                      {selectedProvider === provider.id && (
-                        <div className="w-2 h-2 rounded-full bg-green-500" />
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
               <a
-                href={PROVIDERS.find(p => p.id === selectedProvider)?.keyUrl}
+                href="https://aistudio.google.com/apikey"
                 target="_blank"
                 className="text-green-500 hover:underline text-sm mb-4 block"
               >
-                Get a free {PROVIDERS.find(p => p.id === selectedProvider)?.name} API key
+                Get a free Google AI API key →
               </a>
 
               <Input
-                placeholder={`Enter your ${PROVIDERS.find(p => p.id === selectedProvider)?.name} API key`}
+                placeholder="Enter your Google AI API key"
                 type="password"
                 className="bg-zinc-950 border-zinc-700 text-white mb-4"
                 value={userApiKey}
@@ -325,12 +262,6 @@ export default function AppPage() {
               <Button onClick={saveApiKey} className="w-full bg-green-500 hover:bg-green-400 text-black font-bold">
                 Save API Key
               </Button>
-
-              {selectedProvider !== "google" && (
-                <p className="text-zinc-500 text-xs mt-3 text-center">
-                  Note: Google key required for text search. {PROVIDERS.find(p => p.id === selectedProvider)?.name} used for image analysis.
-                </p>
-              )}
             </motion.div>
           </motion.div>
         )}
@@ -355,7 +286,7 @@ export default function AppPage() {
               className="text-zinc-500 hover:text-white"
             >
               <Key className="w-4 h-4 mr-1" />
-              {hasAnyKey ? "Manage Keys" : "Add Key"}
+              {hasApiKey ? "API Key" : "Add Key"}
             </Button>
             <Link href="/">
               <Button variant="ghost" className="text-zinc-400 hover:text-white">
@@ -366,33 +297,25 @@ export default function AppPage() {
           </div>
         </motion.div>
 
-        {/* Saved Keys Display */}
-        {hasAnyKey && (
+        {/* Saved Key Display */}
+        {hasApiKey && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-wrap items-center gap-2"
+            className="flex items-center gap-2"
           >
             <span className="text-zinc-500 text-sm">Using:</span>
-            {Object.keys(savedKeys).map((providerId) => {
-              const provider = PROVIDERS.find(p => p.id === providerId);
-              return (
-                <span
-                  key={providerId}
-                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full bg-zinc-800 text-xs ${provider?.color}`}
-                >
-                  {provider?.name}
-                  <button onClick={() => clearApiKey(providerId)} className="hover:text-white ml-1">
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              );
-            })}
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-zinc-800 text-xs text-blue-400">
+              Google AI
+              <button onClick={clearApiKey} className="hover:text-white ml-1">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
           </motion.div>
         )}
 
         {/* API Key Warning Banner */}
-        {needsApiKey && !hasAnyKey && (
+        {needsApiKey && !hasApiKey && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}

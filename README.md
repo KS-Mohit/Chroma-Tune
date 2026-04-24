@@ -62,8 +62,8 @@ This application uses a multi-modal AI approach to understand the "vibe" of an i
 
 1. **Clone the repository:**
     ```bash
-    git clone https://github.com/KS-Mohit/ChromaTune.git
-    cd ChromaTune
+    git clone https://github.com/KS-Mohit/Chroma-Tune.git
+    cd Chroma-Tune
     ```
 
 2. **Create your environment variables:**
@@ -146,7 +146,7 @@ Keys are stored locally in the browser (never sent to server for storage).
 ## Project Structure
 
 ```
-ChromaTune/
+Chroma-Tune/
 ├── frontend/                # Next.js frontend
 │   └── src/app/
 │       ├── page.tsx        # Landing page

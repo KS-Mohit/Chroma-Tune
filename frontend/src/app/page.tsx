@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Music, Plus, Zap, Search, Sparkles, Github, ChevronRight } from "lucide-react";
+import { Music, Plus, Zap, Search, Sparkles, Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -26,7 +26,7 @@ export default function Home() {
             <span className="text-xl font-bold tracking-tight">ChromaTune</span>
           </div>
           <a
-            href="https://github.com/KS-Mohit/ChromaTune"
+            href="https://github.com/KS-Mohit/Chroma-Tune"
             target="_blank"
             className="p-2 rounded-lg hover:bg-zinc-800 transition-colors"
           >
@@ -67,10 +67,9 @@ export default function Home() {
           <Link href="/app">
             <Button
               size="lg"
-              className="bg-green-500 hover:bg-green-400 text-black font-bold text-lg px-8 py-6 rounded-xl"
+              className="bg-green-500 hover:bg-green-400 active:bg-green-600 text-black font-bold text-lg px-10 h-14 rounded-xl shadow-lg shadow-green-500/25 hover:shadow-green-400/40 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
             >
               Try It Now
-              <ChevronRight className="w-5 h-5 ml-2" />
             </Button>
           </Link>
         </motion.div>

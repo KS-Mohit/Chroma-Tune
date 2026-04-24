@@ -6,21 +6,15 @@ import google.generativeai as genai
 import os
 from PIL import Image
 import io
-import base64
-import httpx
 from dotenv import load_dotenv
 from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone
 from collections import defaultdict
 import time
-import asyncio
 from contextlib import asynccontextmanager
 
 from services import sync_collaborative_playlist, get_song_count, init_indexed_songs, GoogleNativeEmbeddings
 
-# Auto-sync configuration
-AUTO_SYNC_ENABLED = os.getenv("AUTO_SYNC_ENABLED", "false").lower() == "true"
-AUTO_SYNC_INTERVAL = int(os.getenv("AUTO_SYNC_INTERVAL", "300"))  # seconds (default 5 min)
 
 load_dotenv()
 
@@ -36,59 +30,6 @@ def describe_image_google(image: Image.Image, api_key: str) -> str:
     return response.text
 
 
-def describe_image_openai(image_bytes: bytes, api_key: str) -> str:
-    """Use OpenAI GPT-4o for image description."""
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-
-    with httpx.Client() as client:
-        response = client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={
-                "model": "gpt-4o",
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Describe the vibe, mood, and atmosphere of this image in detail for a music playlist."},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                    ]
-                }],
-                "max_tokens": 300
-            },
-            timeout=30
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
-
-
-def describe_image_anthropic(image_bytes: bytes, api_key: str) -> str:
-    """Use Anthropic Claude for image description."""
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-
-    with httpx.Client() as client:
-        response = client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 300,
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64_image}},
-                        {"type": "text", "text": "Describe the vibe, mood, and atmosphere of this image in detail for a music playlist."}
-                    ]
-                }]
-            },
-            timeout=30
-        )
-        response.raise_for_status()
-        return response.json()["content"][0]["text"]
-
 # Collaborative playlist ID
 PLAYLIST_ID = "5DYHhVIXo6PhfXqjIlu6rt"
 
@@ -100,39 +41,13 @@ RATE_LIMIT_REQUESTS = 10  # requests per window
 RATE_LIMIT_WINDOW = 60    # seconds
 request_counts = defaultdict(list)
 
-async def auto_sync_task():
-    """Background task that periodically syncs the playlist."""
-    while True:
-        await asyncio.sleep(AUTO_SYNC_INTERVAL)
-        try:
-            print(f"[Auto-Sync] Checking for new songs...")
-            result = sync_collaborative_playlist(PLAYLIST_ID)
-            if result.get("new_songs", 0) > 0:
-                print(f"[Auto-Sync] Added {result['new_songs']} new songs!")
-            else:
-                print(f"[Auto-Sync] No new songs found.")
-        except Exception as e:
-            print(f"[Auto-Sync] Error: {e}")
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
-    # Startup
-    print("Initializing ChromaTune API...")
-    init_indexed_songs(PLAYLIST_ID)
-
-    # Start auto-sync background task if enabled
-    if AUTO_SYNC_ENABLED:
-        print(f"[Auto-Sync] Enabled. Checking every {AUTO_SYNC_INTERVAL} seconds.")
-        asyncio.create_task(auto_sync_task())
-    else:
-        print("[Auto-Sync] Disabled. Set AUTO_SYNC_ENABLED=true to enable.")
-
+    print("ChromaTune API ready")
     yield
-
-    # Shutdown
-    print("Shutting down ChromaTune API...")
+    print("ChromaTune API shutting down")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -195,9 +110,7 @@ def get_stats():
     count = get_song_count()
     return {
         "song_count": count,
-        "playlist_id": PLAYLIST_ID,
-        "auto_sync_enabled": AUTO_SYNC_ENABLED,
-        "auto_sync_interval": AUTO_SYNC_INTERVAL
+        "playlist_id": PLAYLIST_ID
     }
 
 
@@ -257,20 +170,10 @@ def inspect_pinecone(limit: int = 20, secret: str = None):
 
 @app.get("/api-status")
 def api_status():
-    """Check if server API keys are working."""
+    """Check if server API keys are configured."""
     server_key = os.getenv("GOOGLE_API_KEY")
-    if not server_key:
-        return {"status": "unavailable", "needs_user_key": True}
-
-    try:
-        genai.configure(api_key=server_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        model.generate_content("test", generation_config={"max_output_tokens": 1})
-        return {"status": "available", "needs_user_key": False}
-    except Exception as e:
-        if "quota" in str(e).lower() or "limit" in str(e).lower() or "exhausted" in str(e).lower():
-            return {"status": "quota_exceeded", "needs_user_key": True}
-        return {"status": "available", "needs_user_key": False}
+    # Just check if key exists - don't waste quota on test calls
+    return {"status": "available" if server_key else "unavailable", "needs_user_key": not server_key}
 
 
 @app.get("/test-embedding")
@@ -394,45 +297,26 @@ async def search_vibe(
     text: str = Form(None),
     file: UploadFile = File(None),
     user_api_key: str = Form(None),
-    provider: str = Form("google")  # google, openai, anthropic
+    provider: str = Form("google")  # kept for compatibility
 ):
     # Rate limiting
     client_ip = request.client.host
     if not check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Please wait a minute.")
 
-    # For text search, we need Google API for embeddings (Pinecone compatibility)
-    google_key, using_user_key = get_api_key(user_api_key if provider == "google" else None)
+    # Get Google API key (server or user-provided)
+    api_key, using_user_key = get_api_key(user_api_key)
 
-    # If no Google key available for embeddings, we can't search
-    if not google_key and not text:
-        raise HTTPException(status_code=503, detail="Google API required for search. Please provide a Google API key.")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Google API key required. Please provide your API key.")
 
-    # 1. Handle Vision (if image uploaded)
+    # 1. Handle image (if uploaded)
     image_description = ""
     if file:
         try:
             content = await file.read()
-
-            if provider == "google":
-                api_key = user_api_key or google_key
-                if not api_key:
-                    raise HTTPException(status_code=503, detail="API unavailable. Please provide an API key.")
-                image = Image.open(io.BytesIO(content))
-                image_description = describe_image_google(image, api_key)
-
-            elif provider == "openai":
-                if not user_api_key:
-                    raise HTTPException(status_code=400, detail="OpenAI API key required.")
-                image_description = describe_image_openai(content, user_api_key)
-
-            elif provider == "anthropic":
-                if not user_api_key:
-                    raise HTTPException(status_code=400, detail="Anthropic API key required.")
-                image_description = describe_image_anthropic(content, user_api_key)
-
-        except HTTPException:
-            raise
+            image = Image.open(io.BytesIO(content))
+            image_description = describe_image_google(image, api_key)
         except Exception as e:
             print(f"Vision Error: {e}")
             raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
@@ -445,15 +329,8 @@ async def search_vibe(
 
     print(f"Searching for: {full_query}")
 
-    # 3. Connect to Pinecone (always uses Google embeddings for compatibility)
-    # Use server Google key for embeddings if available, otherwise need user's Google key
-    embedding_key = google_key or (user_api_key if provider == "google" else None)
-    if not embedding_key:
-        raise HTTPException(status_code=503, detail="Google API key required for search embeddings.")
-
-    # Configure genai with the appropriate key
-    genai.configure(api_key=embedding_key)
-
+    # 3. Search Pinecone
+    genai.configure(api_key=api_key)
     embeddings = GoogleNativeEmbeddings(model="models/gemini-embedding-001")
 
     vector_store = PineconeVectorStore.from_existing_index(
@@ -461,7 +338,6 @@ async def search_vibe(
         embedding=embeddings
     )
 
-    # 4. Search
     results = vector_store.similarity_search_with_score(full_query, k=5)
 
     songs = []
@@ -473,7 +349,7 @@ async def search_vibe(
             "score": float(score)
         })
 
-    return {"vibe_analysis": full_query, "songs": songs, "used_user_key": using_user_key, "provider": provider}
+    return {"vibe_analysis": full_query, "songs": songs, "used_user_key": using_user_key}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
