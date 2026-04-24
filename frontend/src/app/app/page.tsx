@@ -476,7 +476,7 @@ export default function AppPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="text-zinc-600 font-mono text-sm">{Math.round(100 - (song.score * 10))}%</div>
+                      <div className="text-zinc-600 font-mono text-sm">{Math.round(song.score * 100)}%</div>
                       <ExternalLink className="w-4 h-4 text-zinc-600 group-hover:text-green-500" />
                     </div>
                   </motion.div>
