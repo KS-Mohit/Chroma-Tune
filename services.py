@@ -264,7 +264,7 @@ def init_indexed_songs(playlist_id):
 
 
 def generate_batch_descriptions(songs_batch, audio_features_map):
-    """Uses Gemini with Google Search to generate vibe descriptions based on lyrics and song info."""
+    """Uses Gemini to generate vibe descriptions for songs."""
     model = genai.GenerativeModel("gemini-2.5-flash")
 
     # Build song list
@@ -275,7 +275,7 @@ def generate_batch_descriptions(songs_batch, audio_features_map):
     songs_text = "\n".join(songs_lines)
 
     prompt = f"""
-    For each song below, search for its lyrics and mood online, then provide a short, vivid 1-sentence vibe description capturing the song's emotional atmosphere and ideal setting.
+    You are a music expert. For each song below, based on your knowledge of its lyrics, genre, artist style, and musical mood, provide a short, vivid 1-sentence vibe description capturing the song's emotional atmosphere and ideal listening setting.
 
     RETURN ONLY RAW JSON. Format: [{{"title": "Song Title", "vibe": "Description"}}]
 
@@ -283,10 +283,7 @@ def generate_batch_descriptions(songs_batch, audio_features_map):
     {songs_text}
     """
     try:
-        response = model.generate_content(
-            prompt,
-            tools='google_search_retrieval'  # Enable web search for lyrics/info
-        )
+        response = model.generate_content(prompt)
         clean_text = re.sub(r'```json|```', '', response.text).strip()
         return json.loads(clean_text)
     except Exception as e:
