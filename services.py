@@ -265,12 +265,7 @@ def init_indexed_songs(playlist_id):
 
 def generate_batch_descriptions(songs_batch, audio_features_map):
     """Uses Gemini with Google Search to generate vibe descriptions based on lyrics and song info."""
-    from google.generativeai.types import Tool
-
-    model = genai.GenerativeModel(
-        "gemini-2.5-flash",
-        tools=[Tool(google_search={})]  # Enable web search for lyrics/info
-    )
+    model = genai.GenerativeModel("gemini-2.5-flash")
 
     # Build song list
     songs_lines = []
@@ -288,7 +283,10 @@ def generate_batch_descriptions(songs_batch, audio_features_map):
     {songs_text}
     """
     try:
-        response = model.generate_content(prompt)
+        response = model.generate_content(
+            prompt,
+            tools='google_search_retrieval'  # Enable web search for lyrics/info
+        )
         clean_text = re.sub(r'```json|```', '', response.text).strip()
         return json.loads(clean_text)
     except Exception as e:
