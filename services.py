@@ -46,6 +46,23 @@ INDEXED_SONGS_FILE = "indexed_songs.json"
 MAX_SONGS = 500  # Stay well under free tier limits
 
 
+def get_pinecone_indexed_ids():
+    """Fetch all indexed song IDs directly from Pinecone."""
+    try:
+        index = pc.Index(INDEX_NAME)
+        indexed_ids = set()
+
+        # List all vector IDs from Pinecone
+        for ids in index.list():
+            if ids:
+                indexed_ids.update(ids)
+
+        return indexed_ids
+    except Exception as e:
+        print(f"[Pinecone] Error fetching indexed IDs: {e}")
+        return set()
+
+
 def get_spotify_token():
     try:
         client_id = os.getenv("SPOTIFY_CLIENT_ID")
@@ -247,24 +264,26 @@ def init_indexed_songs(playlist_id):
 
 
 def generate_batch_descriptions(songs_batch, audio_features_map):
-    """Uses Gemini to generate vibe descriptions for songs, enhanced with audio features."""
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    """Uses Gemini with Google Search to generate vibe descriptions based on lyrics and song info."""
+    from google.generativeai.types import Tool
 
-    # Build song text with audio features
+    model = genai.GenerativeModel(
+        "gemini-2.5-flash",
+        tools=[Tool(google_search={})]  # Enable web search for lyrics/info
+    )
+
+    # Build song list
     songs_lines = []
     for i, s in enumerate(songs_batch):
-        features = audio_features_map.get(s['id'], {})
-        feature_desc = describe_audio_features(features)
-        if feature_desc:
-            songs_lines.append(f"{i+1}. {s['name']} by {s['artist']} ({feature_desc})")
-        else:
-            songs_lines.append(f"{i+1}. {s['name']} by {s['artist']}")
+        songs_lines.append(f"{i+1}. \"{s['name']}\" by {s['artist']}")
 
     songs_text = "\n".join(songs_lines)
 
     prompt = f"""
-    I have a list of songs with their audio characteristics. For each song, provide a short, vivid, 1-sentence description of the vibe/setting that matches both the song and its audio profile.
+    For each song below, search for its lyrics and mood online, then provide a short, vivid 1-sentence vibe description capturing the song's emotional atmosphere and ideal setting.
+
     RETURN ONLY RAW JSON. Format: [{{"title": "Song Title", "vibe": "Description"}}]
+
     Songs:
     {songs_text}
     """
@@ -301,11 +320,11 @@ def sync_collaborative_playlist(playlist_id):
                 "url": t.get('external_urls', {}).get('spotify', '#')
             })
 
-    # 3. Find new songs (not yet indexed)
-    indexed_ids = get_indexed_song_ids()
+    # 3. Find new songs (check Pinecone directly, not local file)
+    indexed_ids = get_pinecone_indexed_ids()
     new_tracks = [t for t in all_tracks if t['id'] not in indexed_ids]
 
-    print(f"Total songs: {len(all_tracks)}, Already indexed: {len(indexed_ids)}, New: {len(new_tracks)}")
+    print(f"Total songs: {len(all_tracks)}, Already in Pinecone: {len(indexed_ids)}, New: {len(new_tracks)}")
 
     if not new_tracks:
         return {"success": True, "song_count": len(indexed_ids), "new_songs": 0, "error": None}
